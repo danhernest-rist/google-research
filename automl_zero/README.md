@@ -1,3 +1,10 @@
+# RIST-saml
+
+## 1-CPU AutoML-Zero with improved regularized_evolution 
+
+Our variant of Sequential AutoML-Zero brings a complex procedure for renewal of DSL algorithms population as an alternative to regularized_evolution.{h,cc} of Google Research AutoML-Zero designed to run on one CPU. We also provide updated task.proto and task_util.h to generate ProjectedMultiClassificationTask for attempts at 10-class multiclassification (which requires an alternative executor.h). The list of updated sources includes evaluator.{h,cc} to allow for multi-dimensional evaluation (on projected dimensions 16, 32, 64, 128 and even 256). Dimension 256 allows for increased maximal fitness but runs much slower (even w.r.t. dimension 128) and requires setting EIGEN_STACK_ALLOCATION_LIMIT 0 in
+[bazel-automl_zero/external/eigen_archive/Eigen/src/Core/util/Macros.h](http://eigen.tuxfamily.org/)  Source code is authored by [Dan Hernest](mailto:hernest@rist.ro) 
+
 # AutoML-Zero
 
 Open source code for the paper: \"[**AutoML-Zero: Evolving Machine Learning Algorithms From Scratch**](https://arxiv.org/abs/2003.03384)"
