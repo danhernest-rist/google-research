@@ -1,3 +1,5 @@
+// Copyright 2020 Romanian Institute of Science and Technology
+// https://rist.ro for differential changes w.r.t. the original
 // Copyright 2020 The Google Research Authors.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -46,12 +48,13 @@ class TrainBudget {
       const Algorithm& algorithm,
       // The compute budget, measured in training examples.
       IntegerT budget) const;
-
+  void ResetThreshold(double new_threshold);
+  
  private:
   // Cost for running each component function once. Measured in compute-units.
   const double baseline_setup_cost_;
   const double baseline_train_cost_;
-  const double threshold_factor_;
+  double threshold_factor_;
 };
 
 std::unique_ptr<TrainBudget> BuildTrainBudget(

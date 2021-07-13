@@ -1,3 +1,5 @@
+// Copyright 2020 Romanian Institute of Science and Technology
+// https://rist.ro for differential changes w.r.t. the original
 // Copyright 2020 The Google Research Authors.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -77,37 +79,56 @@ Evaluator::Evaluator(const FitnessCombinationMode fitness_combination_mode,
   FillTasks(task_collection_, &tasks_);
   CHECK_GT(tasks_.size(), 0);
 }
+  
+  // DANHER BEGIN
+void Evaluator::ResetThreshold(const double new_threshold) {
+    train_budget_->ResetThreshold(new_threshold);
+}    
 
-double Evaluator::Evaluate(const Algorithm& algorithm) {
+double Evaluator::PreEvaluate(const Algorithm& algorithm, const IntegerT fs) {
+  IntegerT task_index;  // Task to use.
+  // Use only a task of given Features Size (DIM) fs
+  IntegerT j = 0;
+  for (IntegerT i = 0; j < 1 && i < tasks_.size(); ++i) 
+    if (tasks_[i]->FeaturesSize() == fs) { task_index=i; ++j; } if (j < 1)  {
+    std::cerr << "\nFATAL error in evaluator.cc at "
+	      << "Evaluator::Evaluate(.., const IntegerT fs)"
+	      << "\nNo task was found of DIM " << fs; exit(-1);
+  } IntegerT num_train_examples = tasks_[task_index]->MaxTrainExamples();
+  CHECK_GE(num_train_examples, kMinNumTrainExamples); if (train_budget_ != nullptr)
+  if (!train_budget_->TrainExamples(algorithm, num_train_examples)) num_train_examples = 0;
+  if (!num_train_examples) return kMinFitness; return kMaxFitness;
+}  
+  
+double Evaluator::Evaluate(const Algorithm& algorithm, const IntegerT fs) {
+  if (PreEvaluate(algorithm, fs) == kMinFitness) return kMinFitness;  
   // Compute the mean fitness across all tasks.
   vector<double> task_fitnesses;
-  task_fitnesses.reserve(tasks_.size());
+  // task_fitnesses.reserve(tasks_.size());
   vector<double> debug_fitnesses;
   vector<IntegerT> debug_num_train_examples;
   vector<IntegerT> task_indexes;  // Tasks to use.
-  // Use all the tasks.
-  for (IntegerT i = 0; i < tasks_.size(); ++i) {
-    task_indexes.push_back(i);
-  }
-  for (IntegerT task_index : task_indexes) {
-    const unique_ptr<TaskInterface>& task = tasks_[task_index];
-    CHECK_GE(task->MaxTrainExamples(), kMinNumTrainExamples);
-    const IntegerT num_train_examples =
-        train_budget_ == nullptr ?
-        task->MaxTrainExamples() :
-        train_budget_->TrainExamples(algorithm, task->MaxTrainExamples());
-    double curr_fitness = -1.0;
-    curr_fitness = Execute(*task, num_train_examples, algorithm);
-    task_fitnesses.push_back(curr_fitness);
-  }
-  double combined_fitness =
-      CombineFitnesses(task_fitnesses, fitness_combination_mode_);
+  // Use only the tasks of given Features Size (DIM) fs
+  IntegerT j = 0;
+  for (IntegerT i = 0; i < tasks_.size(); ++i) 
+    if (tasks_[i]->FeaturesSize() == fs) { task_indexes.push_back(i); ++j; } if (j < 1)  {
+    std::cerr << "\nFATAL error in evaluator.cc at "
+	      << "Evaluator::Evaluate(.., const IntegerT fs)"
+	      << "\nNo task was found of DIM " << fs; exit(-1);
+  } task_fitnesses.reserve(j);
+  IntegerT num_train_examples = tasks_[task_indexes[0]]->MaxTrainExamples();
 
-  CHECK_GE(combined_fitness, kMinFitness);
-  CHECK_LE(combined_fitness, kMaxFitness);
+#pragma omp parallel for schedule(dynamic, 1)
+  for (IntegerT task_index : task_indexes) 
+    task_fitnesses.push_back(Execute(*tasks_[task_index], num_train_examples, algorithm)); 
 
+  double combined_fitness = CombineFitnesses(task_fitnesses, fitness_combination_mode_);
+  CHECK_GE(combined_fitness, kMinFitness); CHECK_LE(combined_fitness, kMaxFitness);
   return combined_fitness;
 }
+  //DANHER END
+  
+double Evaluator::Evaluate(const Algorithm& algorithm) { return Evaluate(algorithm, 256); }
 
 double Evaluator::Execute(const TaskInterface& task,
                           const IntegerT num_train_examples,
@@ -125,6 +146,10 @@ double Evaluator::Execute(const TaskInterface& task,
       const Task<8>& downcasted_task = *SafeDowncast<8>(&task);
       return ExecuteImpl<8>(downcasted_task, num_train_examples, algorithm);
     }
+    case 10: {
+      const Task<10>& downcasted_task = *SafeDowncast<10>(&task);
+      return ExecuteImpl<10>(downcasted_task, num_train_examples, algorithm);
+    }
     case 16: {
       const Task<16>& downcasted_task = *SafeDowncast<16>(&task);
       return ExecuteImpl<16>(downcasted_task, num_train_examples, algorithm);
@@ -133,7 +158,23 @@ double Evaluator::Execute(const TaskInterface& task,
       const Task<32>& downcasted_task = *SafeDowncast<32>(&task);
       return ExecuteImpl<32>(downcasted_task, num_train_examples, algorithm);
     }
-    default:
+    case 64: {
+      const Task<64>& downcasted_task = *SafeDowncast<64>(&task);
+      return ExecuteImpl<64>(downcasted_task, num_train_examples, algorithm);
+    }
+    case 128: {
+      const Task<128>& downcasted_task = *SafeDowncast<128>(&task);
+      return ExecuteImpl<128>(downcasted_task, num_train_examples, algorithm);
+    }	
+    case 256: {
+      const Task<256>& downcasted_task = *SafeDowncast<256>(&task);
+      return ExecuteImpl<256>(downcasted_task, num_train_examples, algorithm);
+    }	
+      /* case 784: {
+      const Task<784>& downcasted_task = *SafeDowncast<784>(&task);
+      return ExecuteImpl<784>(downcasted_task, num_train_examples, algorithm);
+      } */	
+  default:
       LOG(FATAL) << "Unsupported features size." << endl;
   }
 }

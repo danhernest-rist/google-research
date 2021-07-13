@@ -1,3 +1,5 @@
+// Copyright 2020 Romanian Institute of Science and Technology
+// https://rist.ro for differential changes w.r.t. the original
 // Copyright 2020 The Google Research Authors.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -16,6 +18,7 @@
 #define AUTOML_ZERO_TASK_UTIL_H_
 
 #include <array>
+#include <tuple> 
 #include <fstream>
 #include <random>
 #include <type_traits>
@@ -30,10 +33,11 @@
 #include "absl/strings/str_cat.h"
 
 namespace automl_zero {
-
+  
 using ::std::shuffle;  // NOLINT
 using ::std::vector;  // NOLINT
-
+using TRIPLE = std::tuple<IntegerT, IntegerT, IntegerT>;
+void TSort(TRIPLE& t);    
 const RandomSeedT kFirstParamSeedForTest = 9000;
 const RandomSeedT kFirstDataSeedForTest = 19000;
 
@@ -129,7 +133,7 @@ struct ProjectedBinaryClassificationTaskCreator {
   static void Create(EvalType eval_type,
                      const ProjectedBinaryClassificationTask& task_spec,
                      IntegerT num_train_examples, IntegerT num_valid_examples,
-                     IntegerT features_size, RandomSeedT data_seed,
+                     RandomSeedT data_seed,
                      TaskBuffer<F>* buffer) {
     ClearAndResize(num_train_examples, num_valid_examples, buffer);
 
@@ -197,7 +201,9 @@ struct ProjectedBinaryClassificationTaskCreator {
     std::string filename = absl::StrCat(
         "binary_", task_spec.dataset_name(), "-pos_",
         positive_class, "-neg_", negative_class,
-        "-dim_", features_size, "-seed_", data_seed);
+        "-dim_", F, "-seed_", data_seed);
+
+    std::cerr<<"F="<<F<<" | "<<filename<<'\n'; std::cerr.flush();
 
     std::string full_path = path + "/" + filename;
     ScalarLabelDataset saved_dataset;
@@ -221,7 +227,7 @@ struct ProjectedBinaryClassificationTaskCreator {
     CHECK_GE(saved_dataset.train_labels_size(),
              buffer->train_labels_.size())
          << "Not enough training labels in " << full_path << std::endl;
-    CHECK_EQ(features_size,
+    CHECK_EQ(F,
              saved_dataset.train_features(0).features_size())
         << "Incorrect feature size in " << full_path << std::endl;
 
@@ -250,6 +256,114 @@ struct ProjectedBinaryClassificationTaskCreator {
     CHECK(eval_type == ACCURACY);
   }
 };
+
+  //////////////////////////// DANHER BEGIN ///////////////////////////////////////
+  
+template <FeatureIndexT F>
+struct ProjectedTernaryClassificationTaskCreator {
+  static void Create(EvalType eval_type,
+                     const ProjectedTernaryClassificationTask& task_spec,
+                     IntegerT num_train_examples, IntegerT num_valid_examples,
+                     RandomSeedT data_seed,
+                     TaskBuffer<F>* buffer) {
+    ClearAndResize(num_train_examples, num_valid_examples, buffer);
+    std::string path;
+    CHECK(task_spec.has_path() & !task_spec.path().empty())
+        << "You have to specifiy the path to the data!" << std::endl;
+    path = task_spec.path();
+    IntegerT fst_class; IntegerT snd_class; IntegerT thr_class;
+
+    if (task_spec.has_fst_class() &&
+        task_spec.has_snd_class() && task_spec.has_thr_class()) {
+      fst_class = task_spec.fst_class(); snd_class = task_spec.snd_class();
+      thr_class = task_spec.thr_class();
+      IntegerT num_supported_data_seeds =
+          task_spec.max_supported_data_seed() -
+          task_spec.min_supported_data_seed();
+      data_seed = static_cast<RandomSeedT>(
+          task_spec.min_supported_data_seed() +
+          data_seed % num_supported_data_seeds);
+    } else if (!task_spec.has_fst_class() &&
+               !task_spec.has_snd_class() && !task_spec.has_thr_class()) {
+      std::mt19937 task_bit_gen(HashMix(
+          static_cast<RandomSeedT>(856572777), data_seed));
+      RandomGenerator task_gen(&task_bit_gen);
+
+      std::set<TRIPLE> held_out_tuples_set;
+      for (const ClassTriple& class_tuple : task_spec.held_out_triples()) {
+	TRIPLE t = std::make_tuple(class_tuple.fst_class(), class_tuple.snd_class(),
+	  class_tuple.thr_class()); TSort(t); held_out_tuples_set.insert(t); }
+      //if (F==256) std::cerr<<" HO="<<held_out_tuples_set.size(); 
+      std::vector<TRIPLE> search_tuples;
+      // Assumming the classes are in [0, 10).
+      for (IntegerT i = 0; i < 10; i++) {
+        for (IntegerT j = i+1; j < 10; j++){
+	  for (IntegerT k = j+1; k < 10; k++){
+	    TRIPLE class_tuple(i, j, k);
+	    // Collect all the tuples that are not held out.
+	    if (held_out_tuples_set.count(class_tuple) == 0)
+	      search_tuples.push_back(class_tuple);
+	  } } }
+      //if (F==256) std::cerr<<" ST="<<search_tuples.size(); 
+      CHECK(!search_tuples.empty()) << "All the tuples are held out!" << std::endl;
+
+      TRIPLE selected_tuple =
+          search_tuples[task_gen.UniformInteger(0, (search_tuples.size()))];
+      fst_class = std::get<0>(selected_tuple); snd_class = std::get<1>(selected_tuple);
+      thr_class = std::get<2>(selected_tuple);
+      data_seed = static_cast<RandomSeedT>(task_gen.UniformInteger(
+              task_spec.min_supported_data_seed(), task_spec.max_supported_data_seed()));
+    } else {
+      LOG(FATAL) << ("You should either provide all or none of three classes.")
+		 << std::endl;
+    }
+    // Generate the key using the task_spec.
+    std::string filename = absl::StrCat("ternary_", task_spec.dataset_name(), "-dim_", F,
+      "-seed_",data_seed,"-fst_", fst_class,"-snd_",snd_class,"-thr_",thr_class);
+    /*std::string filename = absl::StrCat("ternary_", task_spec.dataset_name(),
+		  "-fst_", fst_class,"-snd_",snd_class,"-thr_",thr_class,"-dim_",F,"-seed_",data_seed);*/
+    std::string P = absl::StrCat(" (",F,"-",data_seed,":",fst_class,"_",snd_class,"_",thr_class,") ");
+    std::cerr<<P; std::string full_path = path + "/" + filename;
+    ScalarLabelDataset saved_dataset;
+    std::ifstream is(full_path, std::ifstream::binary);
+    CHECK(is.good()) << "No data found at " << full_path
+        << (". Please follow the README to generate "
+            "the projected ternary datasets first.") << std::endl;
+    if (is.good()) {
+      std::string read_buffer((std::istreambuf_iterator<char>(is)),
+                              std::istreambuf_iterator<char>());
+      CHECK(saved_dataset.ParseFromString(read_buffer))
+          << "Error while parsing the proto from " << full_path << std::endl;
+      is.close();
+    }
+
+    // Check there is enough data saved in the sstable.
+    CHECK_GE(saved_dataset.train_features_size(), buffer->train_features_.size())
+        << "Not enough training examples in " << full_path << std::endl;
+    CHECK_GE(saved_dataset.train_labels_size(), buffer->train_labels_.size())
+         << "Not enough training labels in " << full_path << std::endl;
+    CHECK_EQ(F, saved_dataset.train_features(0).features_size())
+        << "Incorrect feature size in " << full_path << std::endl;
+
+    for (IntegerT k = 0; k < buffer->train_features_.size(); ++k)  {
+      for (IntegerT i_dim = 0; i_dim < F; ++i_dim) {
+       buffer->train_features_[k][i_dim] =
+           saved_dataset.train_features(k).features(i_dim);
+      } buffer->train_labels_[k] = saved_dataset.train_labels(k); }
+
+    CHECK_GE(saved_dataset.valid_features_size(), buffer->valid_features_.size());
+    CHECK_GE(saved_dataset.valid_labels_size(), buffer->valid_labels_.size());
+    for (IntegerT k = 0; k < buffer->valid_features_.size(); ++k)  {
+      for (IntegerT i_dim = 0; i_dim < F; ++i_dim) {
+       buffer->valid_features_[k][i_dim] =
+           saved_dataset.valid_features(k).features(i_dim);
+      } buffer->valid_labels_[k] = saved_dataset.valid_labels(k); }
+
+    CHECK(eval_type == ACCURACY);
+  }
+};
+  //////////////////////////// DANHER END ///////////////////////////////////////
+  
 
 // Creates a task using the linear regressor with fixed weights. The
 // weights are determined by the seed. Serves as a way to initialize the
@@ -473,6 +587,7 @@ struct UnitTestIncrementTaskCreator {
 
 template <FeatureIndexT F>
 std::unique_ptr<Task<F>> CreateTask(const IntegerT task_index,
+				    const IntegerT num_train_epochs,
                                     const RandomSeedT param_seed,
                                     const RandomSeedT data_seed,
                                     const TaskSpec& task_spec) {
@@ -480,12 +595,19 @@ std::unique_ptr<Task<F>> CreateTask(const IntegerT task_index,
   CHECK_GT(task_spec.num_valid_examples(), 0);
   TaskBuffer<F> buffer;
   switch (task_spec.task_type_case()) {
+    case (TaskSpec::kProjectedTernaryClassificationTask):
+      ProjectedTernaryClassificationTaskCreator<F>::Create(
+          task_spec.eval_type(),
+          task_spec.projected_ternary_classification_task(),
+          task_spec.num_train_examples(), task_spec.num_valid_examples(),
+	  data_seed, &buffer);
+      break;
     case (TaskSpec::kProjectedBinaryClassificationTask):
       ProjectedBinaryClassificationTaskCreator<F>::Create(
           task_spec.eval_type(),
           task_spec.projected_binary_classification_task(),
           task_spec.num_train_examples(), task_spec.num_valid_examples(),
-          task_spec.features_size(), data_seed, &buffer);
+	  data_seed, &buffer);
       break;
     case (TaskSpec::kScalarLinearRegressionTask):
       ScalarLinearRegressionTaskCreator<F>::Create(
@@ -534,7 +656,7 @@ std::unique_ptr<Task<F>> CreateTask(const IntegerT task_index,
   CHECK(task_spec.has_eval_type());
   return absl::make_unique<Task<F>>(
       task_index, task_spec.eval_type(),
-      task_spec.num_train_epochs(), &data_bit_gen, &buffer);
+      num_train_epochs, &data_bit_gen, &buffer);
 }
 
 // Randomizes all the seeds given a base seed. See "internal workflow" comment

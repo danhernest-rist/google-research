@@ -17,6 +17,8 @@
 
 #include <limits>
 #include <random>
+#include <fstream>
+#include <string>
 
 #include "definitions.h"
 #include "absl/random/random.h"
@@ -27,6 +29,7 @@ namespace automl_zero {
 class RandomGenerator {
  public:
   explicit RandomGenerator(std::mt19937* gen);
+  explicit RandomGenerator(std::mt19937* gen, std::string v2s);
   RandomGenerator(const RandomGenerator& other) = delete;
   RandomGenerator& operator=(const RandomGenerator& other) = delete;
 
@@ -100,7 +103,9 @@ class RandomGenerator {
 
  private:
   friend RandomGenerator RandomGenerator();
-
+  // DANHER begin
+  std::ofstream v2s_; 
+  // DANHER end
   std::unique_ptr<std::mt19937> bit_gen_owned_;
   std::mt19937* bit_gen_;
 };
@@ -114,7 +119,7 @@ void RandomGenerator::FillUniform(
   for (FeatureIndexT i = 0; i < F; ++i) {
     (*vector)(i) =
         absl::Uniform<double>(absl::IntervalOpen, *bit_gen_, low, high);
-  }
+  } 
 }
 
 template<FeatureIndexT F>
@@ -131,9 +136,12 @@ void RandomGenerator::FillUniform(
 template<FeatureIndexT F>
 void RandomGenerator::FillGaussian(
     const double mean, const double stdev, Vector<F>* vector) {
+  //DANHER begin
   for (FeatureIndexT i = 0; i < F; ++i) {
     (*vector)(i) = ::absl::Gaussian<double>(*bit_gen_, mean, stdev);
-  }
+    v2s_<< (*vector)(i) << " ";    
+  } v2s_<< '\n';
+  //DANHER end
 }
 
 template<FeatureIndexT F>

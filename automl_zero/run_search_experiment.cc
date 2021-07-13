@@ -1,3 +1,5 @@
+// Copyright 2020 Romanian Institute of Science and Technology
+// https://rist.ro for differential changes w.r.t. the original
 // Copyright 2020 The Google Research Authors.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -172,7 +174,7 @@ void run() {
     const IntegerT remaining_train_steps =
         experiment_spec.max_train_steps() -
         regularized_evolution.NumTrainSteps();
-    regularized_evolution.Run(remaining_train_steps, kUnlimitedTime);
+    regularized_evolution.Run(remaining_train_steps, kUnlimitedTime, sufficient_fitness);
     cout << "Experiment done. Retrieving candidate algorithm." << endl;
 
     // Extract best algorithm based on T_search.

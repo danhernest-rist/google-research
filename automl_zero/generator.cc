@@ -1,3 +1,5 @@
+// Copyright 2020 Romanian Institute of Science and Technology
+// https://rist.ro for differential changes w.r.t. the original
 // Copyright 2020 The Google Research Authors.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -72,12 +74,11 @@ Algorithm Generator::TheInitModel() {
 Algorithm Generator::ModelByID(const HardcodedAlgorithmID model) {
   switch (model) {
     case NO_OP_ALGORITHM:
-      return NoOp();
+      return NoOp(1.8e-3); // return NoOp();
     case RANDOM_ALGORITHM:
       return Random();
-    case NEURAL_NET_ALGORITHM:
-      return NeuralNet(
-          kDefaultLearningRate, 0.1, 0.1);
+    case NEURAL_NET_ALGORITHM: // return NeuralNet(1.8e-3);
+      return NeuralNet(kDefaultLearningRate, 0.1, 0.1);
     case INTEGRATION_TEST_DAMAGED_NEURAL_NET_ALGORITHM: {
       Algorithm algorithm = NeuralNet(
           kDefaultLearningRate, 0.1, 0.1);
@@ -103,6 +104,88 @@ inline void FillComponentFunctionWithInstruction(
   for (IntegerT pos = 0; pos < num_instructions; ++pos) {
     component_function->emplace_back(instruction);
   }
+}
+
+Algorithm Generator::NoOp(double learning_rate) {
+  Algorithm algorithm; constexpr AddressT s4 = 4;
+  algorithm.setup_.emplace_back(make_shared<const Instruction>(
+      SCALAR_CONST_SET_OP, s4, ActivationDataSetter(learning_rate)));
+  PadComponentFunctionWithInstruction(
+      setup_size_init_, no_op_instruction_, &algorithm.setup_);
+  FillComponentFunctionWithInstruction(
+      predict_size_init_, no_op_instruction_, &algorithm.predict_);
+  FillComponentFunctionWithInstruction(
+      learn_size_init_, no_op_instruction_, &algorithm.learn_);
+  return algorithm;
+}
+
+Algorithm Generator::NeuralNet(
+    const double learning_rate) {
+  Algorithm algorithm;
+
+  // Scalar addresses
+  constexpr AddressT s0 = 0; constexpr AddressT s1 = 1; constexpr AddressT s2 = 2;
+  constexpr AddressT s3 = 3; constexpr AddressT s4 = 4; constexpr AddressT s5 = 5;  
+  CHECK_GE(kMaxScalarAddresses, 6);
+
+  // Vector addresses.
+  constexpr AddressT v0 = 0; constexpr AddressT v1 = 1; constexpr AddressT v2 = 2;
+  constexpr AddressT v3 = 3; constexpr AddressT v4 = 4; constexpr AddressT v5 = 5;
+  CHECK_GE(kMaxVectorAddresses, 6);
+
+  // Matrix addresses.
+  constexpr AddressT m0 = 0; constexpr AddressT m1 = 1; constexpr AddressT m2 = 2;  
+  CHECK_GE(kMaxMatrixAddresses, 3);
+
+  shared_ptr<const Instruction> no_op_instruction =
+      make_shared<const Instruction>();
+
+  algorithm.setup_.reserve(2);  
+  algorithm.setup_.emplace_back(make_shared<const Instruction>(
+      SCALAR_UNIFORM_SET_OP, v1, FloatDataSetter(0.001), FloatDataSetter(0.01)));
+  //SCALAR__SET_OP, s4, ActivationDataSetter(learning_rate)));
+  PadComponentFunctionWithInstruction(
+      setup_size_init_, no_op_instruction, &algorithm.setup_);
+
+  algorithm.predict_.reserve(6);  
+  algorithm.predict_.emplace_back(make_shared<const Instruction>(
+      VECTOR_SUM_OP, v0, v1, v2));
+  algorithm.predict_.emplace_back(make_shared<const Instruction>(
+      VECTOR_DIFF_OP, v0, v1, v3));
+  algorithm.predict_.emplace_back(make_shared<const Instruction>(
+	 MATRIX_VECTOR_PRODUCT_OP, m0, v2, v4));
+  algorithm.predict_.emplace_back(make_shared<const Instruction>(				  
+	 VECTOR_INNER_PRODUCT_OP, v3, v4, s1));
+  /* algorithm.predict_.emplace_back(make_shared<const Instruction>(					  
+     SCALAR_MATRIX_PRODUCT_OP, s2, m2, m0)); */
+  PadComponentFunctionWithInstruction(
+      predict_size_init_, no_op_instruction, &algorithm.predict_);
+
+  algorithm.learn_.reserve(11);
+  algorithm.learn_.emplace_back(make_shared<const Instruction>(
+    SCALAR_DIFF_OP, s0, s1, s3));
+  algorithm.learn_.emplace_back(make_shared<const Instruction>(
+    VECTOR_OUTER_PRODUCT_OP, v3, v0, m0));
+  algorithm.learn_.emplace_back(make_shared<const Instruction>(
+    MATRIX_NORM_OP, m0, s2));				
+  algorithm.learn_.emplace_back(make_shared<const Instruction>(
+    SCALAR_DIVISION_OP, s3, s2, s5));
+  algorithm.learn_.emplace_back(make_shared<const Instruction>(
+    SCALAR_VECTOR_PRODUCT_OP, s5, v3, v5));
+  algorithm.learn_.emplace_back(make_shared<const Instruction>(
+    VECTOR_OUTER_PRODUCT_OP, v5, v2, m0));
+  algorithm.learn_.emplace_back(make_shared<const Instruction>(
+    MATRIX_SUM_OP, m1, m0, m1));
+  /* algorithm.learn_.emplace_back(make_shared<const Instruction>(
+     MATRIX_SUM_OP, m2, m1, m2)); */
+  algorithm.learn_.emplace_back(make_shared<const Instruction>(					  
+    SCALAR_MATRIX_PRODUCT_OP, s4, m1, m0)); // BAD SCALAR_MATRIX_PRODUCT_OP, s4, m2, m0));
+  algorithm.learn_.emplace_back(make_shared<const Instruction>(					
+    VECTOR_UNIFORM_SET_OP, v1, FloatDataSetter(2.4e-3), FloatDataSetter(0.67)));
+  PadComponentFunctionWithInstruction(
+      learn_size_init_, no_op_instruction, &algorithm.learn_);
+
+  return algorithm;
 }
 
 Algorithm Generator::NoOp() {

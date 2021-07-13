@@ -1,3 +1,5 @@
+// Copyright 2020 Romanian Institute of Science and Technology
+// https://rist.ro for differential changes w.r.t. the original
 // Copyright 2020 The Google Research Authors.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -46,9 +48,14 @@ IntegerT TrainBudget::TrainExamples(
       setup_cost + suggested_train_examples * train_cost;
   if (suggested_cost <= baseline_cost * threshold_factor_) {
     return budget;
-  } else {
+  } else { // std::cerr<<" OB ";
     return 0;
   }
+}
+
+void TrainBudget::ResetThreshold(const double new_threshold) {
+  std::cerr<<" Threshold "<<threshold_factor_<<" -> "<<new_threshold<<" ! ";
+  std::cerr.flush(); threshold_factor_ = new_threshold;
 }
 
 unique_ptr<TrainBudget> BuildTrainBudget(

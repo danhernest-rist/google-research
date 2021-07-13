@@ -1,3 +1,5 @@
+// Copyright 2020 Romanian Institute of Science and Technology
+// https://rist.ro for differential changes w.r.t. the original
 // Copyright 2020 The Google Research Authors.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -61,6 +63,10 @@ class Evaluator {
   // Evaluates a Algorithm by executing it on the tasks. Returns the mean
   // fitness.
   double Evaluate(const Algorithm& algorithm);
+  // DANHER only evaluate tasks of given dimension fs
+  void ResetThreshold(double new_threshold);
+  double PreEvaluate(const Algorithm& algorithm, const IntegerT fs);  
+  double Evaluate(const Algorithm& algorithm, const IntegerT fs);  
   // Get the number of train steps this evaluator has performed.
   IntegerT GetNumTrainStepsCompleted() const;
 

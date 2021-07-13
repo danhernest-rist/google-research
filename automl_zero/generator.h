@@ -1,3 +1,5 @@
+// Copyright 2020 Romanian Institute of Science and Technology
+// https://rist.ro for differential changes w.r.t. the original
 // Copyright 2020 The Google Research Authors.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -68,7 +70,7 @@ class Generator {
   Algorithm ModelByID(HardcodedAlgorithmID model);
 
   // A Algorithm with no-op instructions.
-  Algorithm NoOp();
+  Algorithm NoOp(); Algorithm NoOp(double learning_rate);
 
   // Returns Algorithm with fixed-size component functions with random
   // instructions.
@@ -80,7 +82,7 @@ class Generator {
 
   // A 2-layer neural network with one nonlinearity, where both layers implement
   // learning by gradient descent. The weights are initialized randomly.
-  Algorithm NeuralNet(
+  Algorithm NeuralNet(double learning_rate); Algorithm NeuralNet(
       double learning_rate, double first_init_scale, double final_init_scale);
 
   // A 2-layer neural network without bias and no learning.

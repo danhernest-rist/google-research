@@ -1,3 +1,5 @@
+// Copyright 2020 Romanian Institute of Science and Technology
+// https://rist.ro for differential changes w.r.t. the original
 // Copyright 2020 The Google Research Authors.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -963,7 +965,10 @@ struct PredictionGetter {
 template <FeatureIndexT F>
 struct ErrorComputer {
   inline static double Compute(const Memory<F>& memory, const Scalar& label) {
-    return std::abs(label - memory.scalar_[kPredictionsScalarAddress]);
+    // DANHER
+    //return std::abs(label - memory.scalar_[kPredictionsScalarAddress]);
+    // for ternary classification label values are 0, 1 and 2
+    return std::abs(label/static_cast<double>(2.0) - memory.scalar_[kPredictionsScalarAddress]);
   }
 };
 
@@ -1222,7 +1227,9 @@ struct SquashedRmseLossAccumulator {
   inline static void Accumulate(
       const Memory<F>& memory, const Scalar& label,
       double* error, double* loss) {
-    *error = label - memory.scalar_[kPredictionsScalarAddress];
+    // DANHER
+    //*error = label - memory.scalar_[kPredictionsScalarAddress];
+    *error = label/static_cast<double>(2.0) - memory.scalar_[kPredictionsScalarAddress];
     *loss += *error * *error;
   }
 };
@@ -1234,14 +1241,29 @@ struct ProbAccuracyLossAccumulator {
       double* error, double* loss) {
     double logit = memory.scalar_[kPredictionsScalarAddress];
     double pred_prob = Sigmoid(logit);
-    if ((pred_prob > 1.0) || (pred_prob < 0.0)) {
+    /*if ((pred_prob > 1.0) || (pred_prob < 0.0)) {
       *error = std::numeric_limits<double>::infinity();
     } else {
       bool is_correct = ((label > 0.5) == (pred_prob > 0.5));
       *error = is_correct ? 0.0 : 1.0;
-    }
-    *loss += *error;
-  }
+      }*loss += *error;*/ // DANHER
+    // for ternary classification label values are 0, 1 and 2
+    // 2 corresponds to first class, 1 to second and 0 to third
+    if ((pred_prob > 1.0) || (pred_prob < 0.0)) {
+      *error = std::numeric_limits<double>::infinity();
+    } else { double mlabel = label/static_cast<double>(2.0);
+      double TwoThirds = static_cast<double>(2.0)/static_cast<double>(3.0);
+      double OneThird = static_cast<double>(1.0)/static_cast<double>(3.0);
+      /*bool is_correct = ((mlabel > TwoThirds) == (pred_prob > TwoThirds) ||
+			 (mlabel < OneThird) == (pred_prob < OneThird) ||
+			 ((OneThird <= mlabel && mlabel <= TwoThirds) ==
+			 (OneThird <= pred_prob && pred_prob <= TwoThirds)));*/
+      bool is_correct = ((mlabel > TwoThirds) && (pred_prob > TwoThirds)) ||
+	((mlabel < OneThird) && (pred_prob < OneThird)) ||
+	((OneThird <= mlabel) && (mlabel <= TwoThirds) &&
+	 (OneThird <= pred_prob) && (pred_prob <= TwoThirds));
+      *error = is_correct ? 0.0 : 1.0;
+    }  *loss += *error; }
 };
 
 template <FeatureIndexT F>

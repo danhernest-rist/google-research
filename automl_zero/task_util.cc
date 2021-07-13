@@ -1,3 +1,5 @@
+// Copyright 2020 Romanian Institute of Science and Technology
+// https://rist.ro for differential changes w.r.t. the original
 // Copyright 2020 The Google Research Authors.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -48,6 +50,15 @@ using ::std::vector;  // NOLINT
 using ::std::pair;  // NOLINT
 using ::std::set;  // NOLINT
 
+void TSort(TRIPLE& t) {
+  int n = std::tuple_size<TRIPLE>::value;
+  IntegerT a[n]; std::tie(a[0], a[1], a[2]) = t;
+    for (int i = 0; i < n - 1; i++) {
+      IntegerT min = a[i]; int idx = i;
+      for (int j = i+1; j < n; j++) if (a[j] < min) {
+	  idx = j; min = a[idx]; } if (i < idx) std::swap(a[i],a[idx]); }
+}  
+  
 // The values of the seeds below were chosen so that they span tasks of
 // varying difficulties (the difficulties are for the nonlinear tasks).
 vector<RandomSeedT> DefaultFirstParamSeeds() {
@@ -67,66 +78,37 @@ vector<RandomSeedT> DefaultFirstDataSeeds() {
   return {11001, 11012, 11010, 11000, 11006, 11008, 11007, 11003};
 }
 
-void FillTasksFromTaskSpec(
-    const TaskSpec& task_spec,
+  int counter_tasks = 0;
+
+void FillTasksFromTaskSpec(const TaskSpec& task_spec,
     vector<unique_ptr<TaskInterface>>* return_tasks) {
-  const IntegerT num_tasks = task_spec.num_tasks();
-  CHECK_GT(num_tasks, 0);
-  vector<RandomSeedT> first_param_seeds =
-      task_spec.param_seeds_size() == 0
-          ? DefaultFirstParamSeeds()
-          : vector<RandomSeedT>(task_spec.param_seeds().begin(),
-                                task_spec.param_seeds().end());
-  vector<RandomSeedT> first_data_seeds =
-      task_spec.data_seeds_size() == 0
-          ? DefaultFirstDataSeeds()
-          : vector<RandomSeedT>(task_spec.data_seeds().begin(),
-                                task_spec.data_seeds().end());
-  CHECK(!first_param_seeds.empty());
-  CHECK(!first_data_seeds.empty());
-
-  RandomSeedT param_seed;
-  RandomSeedT data_seed;
-  for (IntegerT i = 0; i < num_tasks; ++i) {
-    param_seed =
-        i < first_param_seeds.size() ? first_param_seeds[i] : param_seed + 1;
-    data_seed =
-        i < first_data_seeds.size() ? first_data_seeds[i] : data_seed + 1;
-
-    const IntegerT task_index = return_tasks->size();
-    switch (task_spec.features_size()) {
-      case 2:
-        return_tasks->push_back(CreateTask<2>(task_index, param_seed,
-                                                    data_seed, task_spec));
-        break;
-      case 4:
-        return_tasks->push_back(CreateTask<4>(task_index, param_seed,
-                                                    data_seed, task_spec));
-        break;
-      case 8:
-        return_tasks->push_back(CreateTask<8>(task_index, param_seed,
-                                                    data_seed, task_spec));
-        break;
-      case 16:
-        return_tasks->push_back(CreateTask<16>(task_index, param_seed,
-                                                     data_seed, task_spec));
-        break;
-      case 32:
-        return_tasks->push_back(CreateTask<32>(task_index, param_seed,
-                                                     data_seed, task_spec));
-        break;
-      default:
-        LOG(FATAL) << "Unsupported features size: "
-                   << task_spec.features_size() << std::endl;
-    }
+  const IntegerT nt = task_spec.num_tasks(); CHECK_GT(nt, 0);
+  if (!counter_tasks) {
+    std::time_t seed = std::time(nullptr); std::string sseed = std::to_string(seed);
+    std::ofstream SEED(std::string(std::getenv("HOME"))+"/LOG/dt/tdS"+sseed);
+    SEED << sseed; SEED.flush(); SEED.close(); std::srand(seed); 
+    std::cout << "\n Seed for picking tasks is " << seed << '\n';
   }
+  std::set<RandomSeedT> data_seeds;
+  do data_seeds.insert(std::rand()); while (data_seeds.size() < 14*nt);
+  CHECK_EQ(14*nt, data_seeds.size()); RandomSeedT param_seed = 0; int c = 0;
+  const IntegerT ne = task_spec.num_train_epochs(); CHECK_GT(ne, 1);
+  for (RandomSeedT data_seed: data_seeds) {
+    const IntegerT task_index = return_tasks->size();
+    if (c < 2*nt) return_tasks->push_back(CreateTask<256>(task_index, ne, param_seed, data_seed, task_spec));
+    else if (!counter_tasks && c < 5*nt) return_tasks->push_back(CreateTask<128>(task_index, ne+1, param_seed, data_seed, task_spec));
+    else if (!counter_tasks && c < 9*nt)  return_tasks->push_back(CreateTask<64>(task_index, ne+2, param_seed, data_seed, task_spec));
+    else if (!counter_tasks && c < 12*nt) return_tasks->push_back(CreateTask<32>(task_index, ne+1, param_seed, data_seed, task_spec));
+    else if (!counter_tasks && c < 14*nt) return_tasks->push_back(CreateTask<16>(task_index, ne, param_seed, data_seed, task_spec));
+    else LOG(FATAL) << "FillTasksFromTaskSpec: control should not reach here!" << std::endl; ++c;
+  } std::cerr.flush(); counter_tasks++;
 }
 
 void FillTasks(
     const TaskCollection& task_collection,
     vector<unique_ptr<TaskInterface>>* return_tasks) {
   // Check return targets are empty.
-  CHECK(return_tasks->empty());
+  CHECK(return_tasks->empty()); counter_tasks = 0;
   for (const TaskSpec& task_spec : task_collection.tasks()) {
     FillTasksFromTaskSpec(task_spec, return_tasks);
   }
